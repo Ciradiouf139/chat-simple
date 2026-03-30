@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">Network Monitoring Dashboard</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Ajouter un service à monitorer</h2>
+            <form id="addServiceForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" id="serviceName" placeholder="Nom du service" required
+                       class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" id="serviceHost" placeholder="Adresse IP/Hôte" required
+                       class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="servicePort" placeholder="Port" required min="1" max="65535"
+                       class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" 
+                        class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+                    Ajouter
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Services monitorés</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left">Nom</th>
+                            <th class="px-4 py-2 text-left">Hôte</th>
+                            <th class="px-4 py-2 text-left">Port</th>
+                            <th class="px-4 py-2 text-left">Statut</th>
+                            <th class="px-4 py-2 text-left">Temps de réponse</th>
+                            <th class="px-4 py-2 text-left">Dernière vérification</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicesTable">
+                        {% for service in services %}
+                        <tr class="border-b">
+                            <td class="px-4 py-2 font-medium">{{ service[1] }}</td>
+                            <td class="px-4 py-2">{{ service[2] }}</td>
+                            <td class="px-4 py-2">{{ service[3] }}</td>
+                            <td class="px-4 py-2">
+                                <span class="{% if service[4] == 'up' %}bg-green-500{% elif service[4] == 'down' %}bg-red-500{% else %}bg-gray-500{% endif %} text-white px-2 py-1 rounded text-sm">
+                                    {{ service[4] }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-2">
+                                {% if service[6] %}{{ "%.2f"|format(service[6]) }} ms{% else %}N/A{% endif %}
+                            </td>
+                            <td class="px-4 py-2">
+                                {% if service[5] %}{{ service[5] }}{% else %}Jamais{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if services|length == 0 %}
+                <p class="text-center py-4 text-gray-500">Aucun service configuré</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadServices();
+            setInterval(loadServices, 10000);
+        });
+
+        document.getElementById('addServiceForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('serviceName').value;
+            const host = document.getElementById('serviceHost').value;
+            const port = parseInt(document.getElementById('servicePort').value);
+            
+            fetch('/api/services', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, host, port })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Erreur: ' + data.error);
+                } else {
+                    document.getElementById('addServiceForm').reset();
+                    loadServices();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        function loadServices() {
+            fetch('/api/services')
+            .then(response => response.json())
+            .then(services => {
+                const tbody = document.getElementById('servicesTable');
+                tbody.innerHTML = '';
+                
+                services.forEach(service => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b';
+                    
+                    const statusClass = service.status === 'up' ? 'bg-green-500' : 
+                                       service.status === 'down' ? 'bg-red-500' : 'bg-gray-500';
+                    
+                    row.innerHTML = `
+                        <td class="px-4 py-2 font-medium">${service.name}</td>
+                        <td class="px-4 py-2">${service.host}</td>
+                        <td class="px-4 py-2">${service.port}</td>
+                        <td class="px-4 py-2">
+                            <span class="${statusClass} text-white px-2 py-1 rounded text-sm">
+                                ${service.status}
+                            </span>
+                        </td>
+                        <td class="px-4 py-2">
+                            ${service.response_time ? service.response_time.toFixed(2) + ' ms' : 'N/A'}
+                        </td>
+                        <td class="px-4 py-2">
+                            ${service.last_check ? new Date(service.last_check).toLocaleString() : 'Jamais'}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                if (services.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-500">Aucun service configuré</td></tr>';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
+</html>

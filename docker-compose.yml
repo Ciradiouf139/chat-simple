@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    networks:
+      - chat-network
+    environment:
+      - INSTANCE_NAME=instance1
+    restart: unless-stopped
+
+  app2:
+    build: .
+    ports:
+      - "5001:5000"
+    networks:
+      - chat-network
+    environment:
+      - INSTANCE_NAME=instance2
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: chatdb
+      POSTGRES_USER: chatuser
+      POSTGRES_PASSWORD: chatpass123
+    ports:
+      - "5432:5432"
+    networks:
+      - chat-network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

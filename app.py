@@ -1,9 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, redirect
 import sqlite3
-import time
-import threading
+import random
 from datetime import datetime
-import json
 import os
 
 app = Flask(__name__)
@@ -15,29 +13,24 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            message TEXT NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            room TEXT DEFAULT 'general'
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            color TEXT DEFAULT '#000000',
-            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    cursor.execute("""CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        message TEXT NOT NULL,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        room TEXT DEFAULT 'general'
+    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        color TEXT DEFAULT '#000000',
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
     conn.commit()
     conn.close()
 
 @app.route('/')
 def index():
-    """Page principale du chat"""
     if 'username' not in session:
         return render_template('login.html')
     
@@ -48,19 +41,15 @@ def index():
     cursor.execute('SELECT * FROM users ORDER BY joined_at DESC')
     users = cursor.fetchall()
     conn.close()
-    
     return render_template('chat_new.html', messages=messages, users=users)
 
 @app.route('/login', methods=['POST'])
 def login():
-    """Connexion de l'utilisateur"""
     username = request.form.get('username', '').strip()
     
     if not username or len(username) < 2:
         return render_template('login.html', error='Nom d\'utilisateur invalide')
     
-    # Générer une couleur aléatoire pour l'utilisateur
-    import random
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8']
     user_color = random.choice(colors)
     
@@ -70,7 +59,6 @@ def login():
         cursor.execute('INSERT INTO users (username, color) VALUES (?, ?)', (username, user_color))
         conn.commit()
     except sqlite3.IntegrityError:
-        # L'utilisateur existe déjà, récupérer sa couleur
         cursor.execute('SELECT color FROM users WHERE username = ?', (username,))
         result = cursor.fetchone()
         user_color = result[0] if result else user_color
@@ -83,15 +71,13 @@ def login():
 
 @app.route('/logout')
 def logout():
-    """Déconnexion"""
     session.clear()
     return redirect('/')
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
-    """Envoyer un message"""
     if 'username' not in session:
-        return jsonify({'error': 'Non connecté'}), 401
+        return jsonify({'error': 'Non connecte'}), 401
     
     data = request.json
     message = data.get('message', '').strip()
@@ -104,10 +90,7 @@ def send_message():
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO messages (username, message, room)
-        VALUES (?, ?, ?)
-    ''', (username, message, room))
+    cursor.execute('INSERT INTO messages (username, message, room) VALUES (?, ?, ?)', (username, message, room))
     conn.commit()
     conn.close()
     
@@ -115,17 +98,12 @@ def send_message():
 
 @app.route('/get_messages')
 def get_messages():
-    """Récupérer les messages récents"""
     last_id = request.args.get('last_id', 0, type=int)
     room = request.args.get('room', 'general')
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM messages 
-        WHERE id > ? AND room = ?
-        ORDER BY timestamp ASC
-    ''', (last_id, room))
+    cursor.execute('SELECT * FROM messages WHERE id > ? AND room = ? ORDER BY timestamp ASC', (last_id, room))
     messages = cursor.fetchall()
     conn.close()
     
@@ -143,7 +121,6 @@ def get_messages():
 
 @app.route('/get_users')
 def get_users():
-    """Récupérer la liste des utilisateurs connectés"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT username, color FROM users ORDER BY joined_at DESC')
@@ -161,7 +138,6 @@ def get_users():
 
 @app.route('/api/status')
 def api_status():
-    """API de statut pour vérifier que l'application fonctionne"""
     return jsonify({
         'status': 'online',
         'timestamp': datetime.now().isoformat(),
